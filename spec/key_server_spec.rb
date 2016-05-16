@@ -51,6 +51,16 @@ describe KeyServer do
       key = @key_server.fetch_key
       expect(key).to be_nil
     end
+
+    it 'should handle multiple parallel requests' do
+      @key_server.generate_keys(3)
+      threads = []
+      keys = []
+      threads << Thread.new { 5.times { keys << @key_server.fetch_key } }
+      threads.map(&:join) # wait for all threads to finish
+      expect(keys.count(nil)).to eq(2)
+      expect(keys.reject(&:nil?).size).to eq(3)
+    end
   end
 
   describe '#unblock_key' do
@@ -90,15 +100,8 @@ describe KeyServer do
       @key_server.generate_keys(1)
       key = @key_server.fetch_key
       @key_server.keys[key][:timestamp] = Time.now.to_i - 301
+      @key_server.cleanup
       expect(@key_server.keep_alive_key(key)).to be_falsey
-    end
-
-    it 'frees a key if key is older than a minute' do
-      @key_server.generate_keys(1)
-      key = @key_server.fetch_key
-      @key_server.keys[key][:timestamp] = Time.now.to_i - 61
-      @key_server.keep_alive_key(key)
-      expect(@key_server.free_keys).to have_key(key)
     end
 
     it 'updates key timestamp to current time' do
